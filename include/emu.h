@@ -1,36 +1,30 @@
 #ifndef EMU_H
 #define EMU_H
 
-#include <stdint.h>
+#include "common.h" 
 
-/*
- * Function definitions
- */
+int
+handle_add(emu_t *t);
 
-void
-init(void);
+int
+handle_addi(emu_t *t);
 
-/*
- * Type definitions
- */
+int
+handle_nand(emu_t *t);
 
-typedef enum {
-	RRR,
-	RRI,
-	RI
-} instruction_type_t;
+int
+handle_lui(emu_t *t);
 
-typedef struct {
-	int8_t regs[8];
-	instruction_type_t current_type;
-} emu_t;
+int
+handle_sw(emu_t *t);
 
-typedef int (*Handler)(emu_t *t);
+int
+handle_lw(emu_t *t);
 
-typedef struct {
-	char *name;
-	instruction_type_t type;
-	Handler h;
-} instruction_t;
+int
+handle_bne(emu_t *t);
+
+int
+handle_jalr(emu_t *t);
 
 #endif

@@ -1,6 +1,6 @@
 #include <stdlib.h>
 
-#include "emu.h"
+#include "common.h"
 #include "instructions.h"
 
 emu_t *emu; 
