@@ -2,14 +2,17 @@
 #include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
+#include <stdbool.h>
 
 #include "instructions.h"
+#include "macro.h"
 #include "common.h"
 
 #define MAX_LABELS 	100
 #define MAX_LEN		300
 
 FILE *stream;
+FILE *output;
 char buf		[MAX_LEN];
 
 char *labels	[MAX_LABELS];
@@ -29,10 +32,24 @@ open_file(char *path)
 	return (stream == 0);
 }
 
+int
+open_output()
+{
+	output = fopen("out.bin", "wb");
+	return (output == 0);
+}
+
 void
 write(FILE *stream, char *msg)
 {
 	fprintf(stream, "%s", msg);
+}
+
+void
+write_out(int16_t val)
+{
+	fwrite(&val, sizeof(val), 1, output);
+	printf("%04x\n", val & 0xFFFF);
 }
 
 char *
@@ -64,15 +81,15 @@ index_labels()
 	}
 }
 
-uint16_t
+int8_t
 resolve_label(char *label)
 {
 	for(int i = 0; i < MAX_LABELS; i++) {
-		if(strncmp(labels[i], label, strlen(label)) == 0) {
+		if(strncmp(labels[i], label, strlen(label)-1) == 0) {
 			return label_addr[i];
 		}
 	}
-	return -1;
+	return 0;
 }
 		
 void
@@ -80,23 +97,23 @@ parse_file()
 {
 	char *token;
 
-	int16_t option = 0;
+	int16_t opcode = 0;
 	int line = 0;
 
 	int8_t ops[3] = {0, 0, 0}; 
 	char imm[MAX_LEN]; 
 
+	bool found = false;
+
 	while(get_line() != NULL) {
 			token = strtok(buf, " \t\n");
+			opcode = 0;
+			found = false;
 
 			if(token[strlen(token) - 1] == ':')
 				token = strtok(NULL, " \t\n");
 
-			printf("%s\n", token);
-
 			for(size_t i = 0; i < sizeof(map) / sizeof(map[0]); i++) {
-				option = 0;
-
 				if(strcasecmp(map[i].name, token) == 0) {
 					token = strtok(NULL, " \t\n");
 
@@ -104,28 +121,49 @@ parse_file()
 						case RRR:
 							sscanf(token, "%" SCNd8 ",%" SCNd8 ",%" SCNd8, &ops[0], &ops[1], &ops[2]);
 
-							option = (i << 13);
-							option |= (ops[0] << 10);
-							option |= (ops[1] << 7);
-							option |= (ops[2]);
+							opcode = (i << 13);
+							opcode |= (ops[0] << 10);
+							opcode |= (ops[1] << 7);
+							opcode |= (ops[2]);
 							
 							break;
 						case RRI:
 							sscanf(token, "%" SCNd8 ",%" SCNd8 ",%s", &ops[0], &ops[1], imm);
 
-							option = (i << 13);
-							option |= (ops[0] << 10);
-							option |= (ops[1] << 7);
-							option |= (resolve_label(imm) & 0xFF);
+							opcode = (i << 13);
+							opcode |= (ops[0] << 10);
+							opcode |= (ops[1] << 7);
+							if(strcasecmp(map[i].name, "bne") == 0)
+								opcode |= ((resolve_label(imm) - line - 1) & 0xFF );
+							else 
+								opcode |= (resolve_label(imm) & 0xFF);
 
 							break;
 						case RI:
 							break;
 					}
 
-					printf("%04x\n", option & 0xFFFF);
+					found = true;
 				}
 			}
+
+			// Search in the macro definitions
+			for(size_t i = 0; i < sizeof(macro_map) / sizeof(macro_map[0]); i++) {
+				if(strcasecmp(macro_map[i].name, token) == 0) {
+					if(strcasecmp(".fill", token) == 0) {
+						int16_t val = 0;
+						token = strtok(NULL, " \t\n");
+						sscanf(token, "%" SCNd16, &val);
+						write_out(val);
+					} else {
+						write_out(macro_map[i].val);
+					}
+				}
+			}
+
+			if(found)
+				write_out(opcode);
+
 			line++;
 	}
 }
@@ -140,6 +178,11 @@ main(int argc, char *argv[])
 
 	if(open_file(argv[1])) {
 		write(stderr, "File does not exist!\n");
+		exit(1);
+	}
+
+	if(open_output()) {
+		write(stderr, "Could not open output file!\n");
 		exit(1);
 	}
 
