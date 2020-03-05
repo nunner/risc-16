@@ -1,5 +1,5 @@
 		lw 1,0,count
-		lw 2, 1, 2
+		lw 2,1,2
 start:	add 1,1,2
 		bne 0,1,start
 done:	halt

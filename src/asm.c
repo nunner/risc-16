@@ -64,11 +64,11 @@ index_labels()
 	}
 }
 
-int
+uint16_t
 resolve_label(char *label)
 {
 	for(int i = 0; i < MAX_LABELS; i++) {
-		if(strcmp(label, labels[i]) == 0) {
+		if(strncmp(labels[i], label, strlen(label)) == 0) {
 			return label_addr[i];
 		}
 	}
@@ -92,7 +92,11 @@ parse_file()
 			if(token[strlen(token) - 1] == ':')
 				token = strtok(NULL, " \t\n");
 
+			printf("%s\n", token);
+
 			for(size_t i = 0; i < sizeof(map) / sizeof(map[0]); i++) {
+				option = 0;
+
 				if(strcasecmp(map[i].name, token) == 0) {
 					token = strtok(NULL, " \t\n");
 
@@ -104,7 +108,7 @@ parse_file()
 							option |= (ops[0] << 10);
 							option |= (ops[1] << 7);
 							option |= (ops[2]);
-
+							
 							break;
 						case RRI:
 							sscanf(token, "%" SCNd8 ",%" SCNd8 ",%s", &ops[0], &ops[1], imm);
@@ -113,11 +117,13 @@ parse_file()
 							option |= (ops[0] << 10);
 							option |= (ops[1] << 7);
 							option |= (resolve_label(imm) & 0xFF);
-							
+
 							break;
 						case RI:
 							break;
 					}
+
+					printf("%04x\n", option & 0xFFFF);
 				}
 			}
 			line++;
