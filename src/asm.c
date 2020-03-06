@@ -49,7 +49,9 @@ void
 write_out(int16_t val)
 {
 	fwrite(&val, sizeof(val), 1, output);
+#ifdef DEBUG
 	printf("%04x\n", val & 0xFFFF);
+#endif
 }
 
 char *
@@ -65,19 +67,19 @@ index_labels()
 	size_t addr  = 0;
 	char *token;
 
-	while(get_line() != NULL)
-	{
-		token = strtok(buf, " \t\n");
-		if(token[strlen(token) - 1] == ':') {
-			token[strlen(token) - 1] = '\0';
+	while(get_line() != NULL) {
+		if(*buf != '#' && *buf != '\0' && *buf != '\n') {
+			token = strtok(buf, " \t\n");
+			if(token[strlen(token) - 1] == ':') {
+				token[strlen(token) - 1] = '\0';
 
-			labels[index] = malloc(MAX_LEN * sizeof(char));
-			strncpy(labels[index], token, MAX_LEN);
-			label_addr[index] = addr;
-
-			index++;
+				labels[index] = malloc(MAX_LEN * sizeof(char));
+				strncpy(labels[index], token, MAX_LEN);
+				label_addr[index] = addr; 
+				index++;
+			}
+			addr++;
 		}
-		addr++;
 	}
 }
 
@@ -85,11 +87,11 @@ int8_t
 resolve_label(char *label)
 {
 	for(int i = 0; i < MAX_LABELS; i++) {
-		if(strncmp(labels[i], label, strlen(label)-1) == 0) {
+		if(labels[i] != NULL && strncmp(labels[i], label, strlen(label)) == 0) {
 			return label_addr[i];
 		}
 	}
-	return 0;
+	return atoi(label); 
 }
 		
 void
@@ -106,12 +108,16 @@ parse_file()
 	bool found = false;
 
 	while(get_line() != NULL) {
+		if(*buf != '#' && *buf != '\0' && *buf != '\n') {
 			token = strtok(buf, " \t\n");
 			opcode = 0;
 			found = false;
 
 			if(token[strlen(token) - 1] == ':')
 				token = strtok(NULL, " \t\n");
+
+			if(token[0] == '\0')
+				found = true;
 
 			for(size_t i = 0; i < sizeof(map) / sizeof(map[0]); i++) {
 				if(strcasecmp(map[i].name, token) == 0) {
@@ -125,7 +131,7 @@ parse_file()
 							opcode |= (ops[0] << 10);
 							opcode |= (ops[1] << 7);
 							opcode |= (ops[2]);
-							
+
 							break;
 						case RRI:
 							sscanf(token, "%" SCNd8 ",%" SCNd8 ",%s", &ops[0], &ops[1], imm);
@@ -140,6 +146,12 @@ parse_file()
 
 							break;
 						case RI:
+							sscanf(token, "%" SCNd8  ",%s", &ops[0], imm);
+
+							opcode = (i << 13);
+							opcode |= (ops[0] << 10);
+							opcode |= (resolve_label(imm) & 0x3FF);
+
 							break;
 					}
 
@@ -151,20 +163,25 @@ parse_file()
 			for(size_t i = 0; i < sizeof(macro_map) / sizeof(macro_map[0]); i++) {
 				if(strcasecmp(macro_map[i].name, token) == 0) {
 					if(strcasecmp(".fill", token) == 0) {
-						int16_t val = 0;
-						token = strtok(NULL, " \t\n");
-						sscanf(token, "%" SCNd16, &val);
-						write_out(val);
+						token = strtok(NULL, " \t\n"); 
+						opcode = resolve_label(token);
 					} else {
-						write_out(macro_map[i].val);
+						opcode = macro_map[i].val;
 					}
+
+					found = true;
 				}
 			}
 
-			if(found)
+			if(found) {
 				write_out(opcode);
+			} else {
+				printf("Line %d: unknown instruction\n", line + 1);
+				exit(1);
+			}
 
 			line++;
+		}
 	}
 }
 
@@ -187,8 +204,10 @@ main(int argc, char *argv[])
 	}
 
 	index_labels();
+
 	rewind(stream);
 	parse_file();
 
+	printf("Output written to out.bin\n");
 	return 0;
 }

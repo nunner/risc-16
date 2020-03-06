@@ -15,5 +15,8 @@ emu:
 asm:
 	$(CC) -I $(INCLUDE) -o $(TARGET_ASM) $(CFLAGS) $(LDFLAGS) $(ASM) $(LDLIBS)
 
+debug: asm
+	./$(TARGET_ASM) examples/test.S
+
 clean:
 	rm -f $(TARGET_ASM) $(TARGET_EMU)
